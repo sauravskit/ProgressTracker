@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Daily Flame Tracker 🔥</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <h1 class="title">Daily Flame Tracker <span class="emoji">🔥</span></h1>
+      <div class="controls">
+        <button id="prevMonth" class="icon">◀</button>
+        <div id="monthLabel" class="monthLabel"></div>
+        <button id="nextMonth" class="icon">▶</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="calendar-row">
+        <div id="calendar" class="calendarCard">
+          <div class="week-head">
+            <div>SUN</div><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div>
+          </div>
+          <div id="grid" class="grid"></div>
+        </div>
+
+        <aside class="sidepanel">
+          <div class="panel">
+            <h3>Cloud Backup (GitHub Gist)</h3>
+            <p class="muted">This version uses a preconfigured GitHub token in the code. Replace it in <code>app.js</code> locally.</p>
+            <label>Gist ID (optional) <input id="gistId" placeholder="existing gist id (leave blank to create)"></label>
+            <div class="row">
+              <button id="createGist" class="primary small">Create Gist</button>
+              <button id="pushGist" class="secondary small">Push Now</button>
+              <button id="loadGist" class="secondary small">Load Gist</button>
+            </div>
+            <div id="gistStatus" class="status muted">Gist: not connected</div>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <footer class="foot">
+      <small>Local data is always saved. Gist sync uses your hardcoded token in <code>app.js</code>.</small>
+    </footer>
+  </div>
+
+  <div id="dayModal" class="modal hidden" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-panel">
+      <button id="closeModal" class="modal-close" title="Close">✖</button>
+      <h2 id="modalDateTitle">Date</h2>
+      <section><h3>Goals</h3><div id="goalsList" class="goalsList"></div><button id="addGoalBtn" class="secondary">+ Add goal</button></section>
+      <section><h3>Progress</h3><div id="progressList" class="progressList"></div></section>
+      <div class="modal-footer">
+        <div><strong>Day:</strong> <span id="dayPercent">0%</span></div>
+        <div class="modal-actions"><button id="saveDay" class="primary">Save</button><button id="resetDay" class="danger">Reset</button></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
