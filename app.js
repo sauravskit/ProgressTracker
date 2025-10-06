@@ -7,7 +7,7 @@ const $ = s => document.querySelector(s);
 // Returns encoded token string
 function getTokenString() {
 
-  return "";
+  return "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";
 }
 
 // Optional static token. Keep empty to force using the input field (safer).
