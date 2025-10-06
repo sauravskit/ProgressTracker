@@ -1,232 +1,170 @@
-// Daily Flame Tracker - polished responsive version
-const DEFAULT_GOALS = [
-  "Java theory & project",
-  "Coding",
-  "Health (exercise)",
-  "Water (5 L)",
-  "Sleep (≥6 hrs)"
-];
-const STORAGE_KEY = "dailyFlameTracker_v2";
+const STORAGE_KEY = 'dailyFlameTracker';
+const DEFAULT_GOALS = ['Java theory & project', 'Coding', 'Health', 'Water (5L)', 'Sleep (6h)'];
+let state = { data: {}, view: { year: new Date().getFullYear(), month: new Date().getMonth() } };
 
-let state = {
-  data: {},
-  view: { year: new Date().getFullYear(), month: new Date().getMonth() }
+const $ = s => document.querySelector(s);
+
+// Returns encoded token string
+function getTokenString() {
+
+  return "";
+}
+
+// Optional static token. Keep empty to force using the input field (safer).
+const gt = getTokenString();
+
+// Returns the GitHub Gist token to use. Priority: GIST_TOKEN constant (if set) -> #gistToken input -> ''
+function getGistToken() {
+  try {
+    const input = $('#gistToken');
+    const fromInput = input ? (input.value || '') : '';
+    return (gt || fromInput || '').toString();
+  } catch (e) {
+    return (gt || '').toString();
+  }
+}
+
+function load() {
+  try {
+    state.data = JSON.parse(localStorage.getItem(STORAGE_KEY))?.data || {};
+  } catch (e) {
+    state.data = {};
+  }
+}
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify({ data: state.data })) }
+function key(d) { return d.toISOString().slice(0, 10) }
+function getDay(k) { if (!state.data[k]) state.data[k] = { goals: [...DEFAULT_GOALS], progress: Array(5).fill(0) }; return state.data[k] }
+function avg(a) { return Math.round(a.reduce((x, y) => x + +y, 0) / a.length) }
+function cls(p) { if (p <= 0) return 'empty'; if (p < 15) return 'vlow'; if (p < 40) return 'low'; if (p < 70) return 'mid'; return 'high' }
+
+function render() {
+  const g = $('#grid');
+  if (!g) return;
+  g.innerHTML = '';
+  const y = state.view.year, m = state.view.month;
+  const f = new Date(y, m, 1), l = new Date(y, m + 1, 0);
+  $('#monthLabel').textContent = f.toLocaleString('default', { month: 'long', year: 'numeric' });
+  for (let i = 0; i < f.getDay(); i++) g.appendChild(document.createElement('div'));
+  for (let d = 1; d <= l.getDate(); d++) {
+    const date = new Date(y, m, d), k = key(date), day = getDay(k), p = avg(day.progress);
+    const el = document.createElement('div');
+    el.className = 'day';
+    el.innerHTML = `<div class=date-num>${d}</div><div class="flame ${cls(p)}" data-k="${k}">🔥</div><div>${p}%</div>`;
+    const flame = el.querySelector('.flame');
+    if (flame) flame.onclick = () => openModal(k);
+    g.appendChild(el);
+  }
+}
+
+const modal = $('#dayModal'), title = $('#modalDateTitle'), goalsList = $('#goalsList'), progressList = $('#progressList'), dayP = $('#dayPercent');
+let cur = null;
+
+function openModal(k) {
+  cur = k;
+  const d = new Date(k + 'T00:00');
+  if (title) title.textContent = d.toDateString();
+  const x = getDay(k);
+  if (goalsList) {
+    goalsList.innerHTML = '';
+    x.goals.forEach((g, i) => {
+      const r = document.createElement('div');
+      r.className = 'goal-row';
+      r.innerHTML = `<input value="${g}"> <button class="small">❌</button>`;
+      const input = r.querySelector('input');
+      const btn = r.querySelector('button');
+      if (input) input.oninput = e => { x.goals[i] = e.target.value };
+      if (btn) btn.onclick = () => { x.goals.splice(i, 1); x.progress.splice(i, 1); openModal(k) };
+      goalsList.appendChild(r);
+    });
+  }
+
+  if (progressList) {
+    progressList.innerHTML = '';
+    x.goals.forEach((g, i) => {
+      const r = document.createElement('div');
+      r.className = 'progress-row';
+      const val = x.progress[i] || 0;
+      r.innerHTML = `${g}: <input type=range min=0 max=100 value=${val}> <span>${val}%</span>`;
+      const rng = r.querySelector('input'), sp = r.querySelector('span');
+      if (rng) rng.oninput = e => { x.progress[i] = +e.target.value; if (sp) sp.textContent = x.progress[i] + '%'; if (dayP) dayP.textContent = avg(x.progress) + '%'; render() };
+      progressList.appendChild(r);
+    });
+  }
+
+  if (dayP) dayP.textContent = avg(x.progress) + '%';
+  if (modal) modal.classList.remove('hidden');
+}
+
+if ($('#closeModal')) $('#closeModal').onclick = () => modal.classList.add('hidden');
+if ($('#addGoalBtn')) $('#addGoalBtn').onclick = () => { if (!cur) return; const d = getDay(cur); d.goals.push('New goal'); d.progress.push(0); openModal(cur) };
+if ($('#saveDay')) $('#saveDay').onclick = () => { save(); render(); modal.classList.add('hidden') };
+if ($('#resetDay')) $('#resetDay').onclick = () => { if (!cur) return; if (confirm('Reset this day?')) { state.data[cur] = { goals: [...DEFAULT_GOALS], progress: Array(5).fill(0) }; save(); render(); modal.classList.add('hidden') } };
+if ($('#prevMonth')) $('#prevMonth').onclick = () => { state.view.month--; if (state.view.month < 0) { state.view.month = 11; state.view.year-- } render() };
+if ($('#nextMonth')) $('#nextMonth').onclick = () => { state.view.month++; if (state.view.month > 11) { state.view.month = 0; state.view.year++ } render() };
+
+load(); render();
+
+/* GIST backup */
+async function api(p, m = 'GET', t, b) {
+  const h = { 'Accept': 'application/vnd.github.v3+json' };
+  if (t) h['Authorization'] = 'token ' + t;
+  const r = await fetch('https://api.github.com' + p, { method: m, headers: h, body: b ? JSON.stringify(b) : undefined });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+function status(m) { const el = $('#gistStatus'); if (el) el.textContent = m }
+
+$('#createGist').onclick = async () => {
+  const t = getGistToken().trim();
+  if (!t) return alert('Token needed');
+  status('Creating gist...');
+  try {
+    const b = { description: 'Daily Flame Tracker backup', public: false, files: { 'daily-flame.json': { content: JSON.stringify({ data: state.data }, null, 2) } } };
+    const j = await api('/gists', 'POST', t, b);
+    const gistEl = $('#gistId'); if (gistEl) gistEl.value = j.id;
+    status('Created gist ' + j.id);
+  } catch (e) {
+    alert('Error: ' + e.message);
+    status('Failed');
+  }
 };
 
-const $ = sel => document.querySelector(sel);
-
-// storage
-function load(){
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if(raw){
-    try { state.data = JSON.parse(raw).data || {}; } catch(e){ state.data = {}; }
+$('#pushGist').onclick = async () => {
+  const t = getGistToken().trim();
+  const id = ( $('#gistId') && $('#gistId').value.trim() ) || '';
+  if (!t || !id) return alert('Token and gist id needed');
+  status('Pushing...');
+  try {
+    await api('/gists/' + id, 'PATCH', t, { files: { 'daily-flame.json': { content: JSON.stringify({ data: state.data }, null, 2) } } });
+    status('Push done');
+  } catch (e) {
+    alert('Push failed ' + e.message);
+    status('Error');
   }
-}
-function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify({ data: state.data })); }
+};
 
-function dateToKey(d){
-  return d.toISOString().slice(0,10);
-}
-function keyToDate(k){ return new Date(k + "T00:00:00"); }
-
-function getOrCreate(key){
-  if(!state.data[key]) state.data[key] = { goals: [...DEFAULT_GOALS], progress: Array(DEFAULT_GOALS.length).fill(0) };
-  // normalize
-  if(!Array.isArray(state.data[key].goals)) state.data[key].goals = [...DEFAULT_GOALS];
-  if(!Array.isArray(state.data[key].progress)) state.data[key].progress = state.data[key].goals.map(()=>0);
-  return state.data[key];
-}
-
-function avg(arr){
-  if(!arr || !arr.length) return 0;
-  return Math.round(arr.reduce((a,b)=>a + Number(b),0)/arr.length);
-}
-function intensityClass(p){
-  if(p <= 0) return "empty";
-  if(p < 15) return "vlow";
-  if(p < 40) return "low";
-  if(p < 70) return "mid";
-  return "high";
-}
-
-// calendar render
-function renderCalendar(){
-  const cal = $("#grid");
-  cal.innerHTML = "";
-
-  const year = state.view.year, month = state.view.month;
-  const first = new Date(year, month, 1);
-  const last = new Date(year, month + 1, 0);
-  $("#monthLabel").textContent = first.toLocaleString(undefined, { month:"long", year:"numeric" });
-
-  // pad blanks
-  for(let i=0;i<first.getDay();i++){
-    const b = document.createElement("div");
-    b.className = "day";
-    b.style.visibility = "hidden";
-    cal.appendChild(b);
+$('#loadGist').onclick = async () => {
+  const t = getGistToken().trim();
+  const id = ( $('#gistId') && $('#gistId').value.trim() ) || '';
+  if (!t || !id) return alert('Token and gist id needed');
+  status('Loading...');
+  try {
+    const j = await api('/gists/' + id, 'GET', t);
+    const f = j.files['daily-flame.json'];
+    if (!f) return alert('No file in gist');
+    const d = JSON.parse(f.content);
+    if (d.data) {
+      state.data = Object.assign({}, state.data, d.data);
+      save(); render(); status('Loaded from gist');
+    }
+  } catch (e) {
+    alert('Load failed ' + e.message);
+    status('Error');
   }
+};
 
-  for(let d=1; d<=last.getDate(); d++){
-    const dateObj = new Date(year, month, d);
-    const key = dateToKey(dateObj);
-    const dayData = getOrCreate(key);
-
-    const dayEl = document.createElement("div");
-    dayEl.className = "day";
-
-    const dateNum = document.createElement("div");
-    dateNum.className = "date-num";
-    dateNum.textContent = d;
-    dayEl.appendChild(dateNum);
-
-    const percent = avg(dayData.progress);
-    const flame = document.createElement("div");
-    flame.className = `flame ${intensityClass(percent)}`;
-    flame.textContent = "🔥";
-    flame.title = `${percent}% completed`;
-    flame.dataset.key = key;
-    flame.addEventListener("click", ()=> openModal(key));
-    dayEl.appendChild(flame);
-
-    const perc = document.createElement("div");
-    perc.className = "perc";
-    perc.textContent = `${percent}%`;
-    dayEl.appendChild(perc);
-
-    cal.appendChild(dayEl);
-  }
+// If a gt constant is set, pre-fill the input to make UX easier (but only locally)
+if (gt && $('#gistToken')) {
+  try { $('#gistToken').value = gt } catch (e) { }
 }
-
-// modal behavior
-const modal = $("#dayModal");
-const modalTitle = $("#modalDateTitle");
-const goalsList = $("#goalsList");
-const progressList = $("#progressList");
-const dayPercentEl = $("#dayPercent");
-let currentKey = null;
-
-function openModal(key){
-  currentKey = key;
-  const date = keyToDate(key);
-  modalTitle.textContent = date.toLocaleDateString(undefined, { weekday:"long", month:"short", day:"numeric", year:"numeric" });
-  const day = getOrCreate(key);
-  renderGoals(day);
-  renderProgress(day);
-  dayPercentEl.textContent = avg(day.progress) + "%";
-  modal.classList.remove("hidden");
-  modal.setAttribute("aria-hidden","false");
-}
-
-function closeModal(){
-  modal.classList.add("hidden");
-  modal.setAttribute("aria-hidden","true");
-  currentKey = null;
-}
-
-// render goals and progress
-function renderGoals(day){
-  goalsList.innerHTML = "";
-  day.goals.forEach((g, idx)=>{
-    const row = document.createElement("div");
-    row.className = "goal-row";
-
-    const input = document.createElement("input");
-    input.type = "text";
-    input.value = g;
-    input.addEventListener("input", e=>{
-      day.goals[idx] = e.target.value;
-      renderProgress(day);
-    });
-
-    const rem = document.createElement("button");
-    rem.className = "remove";
-    rem.textContent = "Remove";
-    rem.addEventListener("click", ()=>{
-      day.goals.splice(idx,1);
-      day.progress.splice(idx,1);
-      renderGoals(day);
-      renderProgress(day);
-    });
-
-    row.appendChild(input);
-    row.appendChild(rem);
-    goalsList.appendChild(row);
-  });
-}
-
-function renderProgress(day){
-  progressList.innerHTML = "";
-  // align lengths
-  while(day.progress.length < day.goals.length) day.progress.push(0);
-  while(day.progress.length > day.goals.length) day.progress.pop();
-
-  day.goals.forEach((g, idx)=>{
-    const row = document.createElement("div");
-    row.className = "prog-row";
-
-    const label = document.createElement("div");
-    label.className = "label";
-    label.textContent = g;
-
-    const range = document.createElement("input");
-    range.type = "range"; range.min = 0; range.max = 100; range.value = day.progress[idx] || 0;
-    range.addEventListener("input", e=>{
-      day.progress[idx] = Number(e.target.value);
-      value.textContent = day.progress[idx] + "%";
-      dayPercentEl.textContent = avg(day.progress) + "%";
-      renderCalendar(); // live update
-    });
-
-    const value = document.createElement("div");
-    value.className = "value";
-    value.textContent = (day.progress[idx]||0) + "%";
-
-    row.appendChild(label);
-    row.appendChild(range);
-    row.appendChild(value);
-    progressList.appendChild(row);
-  });
-}
-
-// UI wiring
-$("#addGoalBtn").addEventListener("click", ()=>{
-  if(!currentKey) return;
-  const day = getOrCreate(currentKey);
-  day.goals.push("New goal");
-  day.progress.push(0);
-  renderGoals(day);
-  renderProgress(day);
-});
-
-$("#saveDay").addEventListener("click", ()=>{
-  if(!currentKey) return;
-  save();
-  renderCalendar();
-  closeModal();
-});
-$("#resetDay").addEventListener("click", ()=>{
-  if(!currentKey) return;
-  if(!confirm("Reset this day's goals?")) return;
-  state.data[currentKey] = { goals: [...DEFAULT_GOALS], progress: Array(DEFAULT_GOALS.length).fill(0) };
-  save();
-  renderCalendar();
-  closeModal();
-});
-$("#closeModal").addEventListener("click", closeModal);
-modal.addEventListener("click", e=> { if(e.target === modal) closeModal(); });
-
-$("#prevMonth").addEventListener("click", ()=>{
-  state.view.month--;
-  if(state.view.month < 0){ state.view.month = 11; state.view.year--; }
-  renderCalendar();
-});
-$("#nextMonth").addEventListener("click", ()=>{
-  state.view.month++;
-  if(state.view.month > 11){ state.view.month = 0; state.view.year++; }
-  renderCalendar();
-});
-
-// init
-load();
-renderCalendar();
