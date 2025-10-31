@@ -1,26 +1,20 @@
 const STORAGE_KEY = 'dailyFlameTracker';
-const DEFAULT_GOALS = ['Java theory & project', 'Coding', 'Health', 'Water (5L)', 'Sleep (6h)'];
+const DEFAULT_GOALS = ['Java theory & project', 'Coding', 'Health', 'Water (5L)', 'Sleep (6h)', 'NMC'];
 let state = { data: {}, view: { year: new Date().getFullYear(), month: new Date().getMonth() } };
 
 const $ = s => document.querySelector(s);
 
-// Returns encoded token string
-function getTokenString() {
-
-  return "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";
-}
-
 // Optional static token. Keep empty to force using the input field (safer).
-const gt = getTokenString();
+const GIST_TOKEN = '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';
 
 // Returns the GitHub Gist token to use. Priority: GIST_TOKEN constant (if set) -> #gistToken input -> ''
 function getGistToken() {
   try {
     const input = $('#gistToken');
     const fromInput = input ? (input.value || '') : '';
-    return (gt || fromInput || '').toString();
+    return (GIST_TOKEN || fromInput || '').toString();
   } catch (e) {
-    return (gt || '').toString();
+    return (GIST_TOKEN || '').toString();
   }
 }
 
@@ -31,9 +25,52 @@ function load() {
     state.data = {};
   }
 }
-function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify({ data: state.data })) }
+function save() { 
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ data: state.data }));
+    return true;
+  } catch (e) {
+    console.error('Failed to save data:', e);
+    alert('Failed to save data. Storage might be full or unavailable.');
+    return false;
+  }
+}
+
+function exportData() {
+  const data = JSON.stringify({ data: state.data });
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `progress-tracker-backup-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (imported && imported.data) {
+        state.data = imported.data;
+        save();
+        render();
+        alert('Data imported successfully!');
+      } else {
+        throw new Error('Invalid file format');
+      }
+    } catch (e) {
+      alert('Failed to import data. Please make sure the file is valid.');
+    }
+  };
+  reader.readAsText(file);
+}
+
 function key(d) { return d.toISOString().slice(0, 10) }
-function getDay(k) { if (!state.data[k]) state.data[k] = { goals: [...DEFAULT_GOALS], progress: Array(5).fill(0) }; return state.data[k] }
+function getDay(k) { if (!state.data[k]) state.data[k] = { goals: [...DEFAULT_GOALS], progress: Array(6).fill(0) }; return state.data[k] }
 function avg(a) { return Math.round(a.reduce((x, y) => x + +y, 0) / a.length) }
 function cls(p) { if (p <= 0) return 'empty'; if (p < 15) return 'vlow'; if (p < 40) return 'low'; if (p < 70) return 'mid'; return 'high' }
 
@@ -101,8 +138,24 @@ if ($('#saveDay')) $('#saveDay').onclick = () => { save(); render(); modal.class
 if ($('#resetDay')) $('#resetDay').onclick = () => { if (!cur) return; if (confirm('Reset this day?')) { state.data[cur] = { goals: [...DEFAULT_GOALS], progress: Array(5).fill(0) }; save(); render(); modal.classList.add('hidden') } };
 if ($('#prevMonth')) $('#prevMonth').onclick = () => { state.view.month--; if (state.view.month < 0) { state.view.month = 11; state.view.year-- } render() };
 if ($('#nextMonth')) $('#nextMonth').onclick = () => { state.view.month++; if (state.view.month > 11) { state.view.month = 0; state.view.year++ } render() };
+if ($('#exportData')) $('#exportData').onclick = exportData;
+if ($('#importData')) $('#importData').onchange = (e) => { if (e.target.files.length > 0) importData(e.target.files[0]); };
 
-load(); render();
+// Auto-save when modifying goals or progress
+function setupAutoSave() {
+  const observer = new MutationObserver(() => {
+    if (!modal.classList.contains('hidden')) {
+      save();
+    }
+  });
+  
+  if (goalsList) observer.observe(goalsList, { childList: true, subtree: true });
+  if (progressList) observer.observe(progressList, { childList: true, subtree: true });
+}
+
+load();
+render();
+setupAutoSave();
 
 /* GIST backup */
 async function api(p, m = 'GET', t, b) {
@@ -164,7 +217,7 @@ $('#loadGist').onclick = async () => {
   }
 };
 
-// If a gt constant is set, pre-fill the input to make UX easier (but only locally)
-if (gt && $('#gistToken')) {
-  try { $('#gistToken').value = gt } catch (e) { }
+// If a GIST_TOKEN constant is set, pre-fill the input to make UX easier (but only locally)
+if (GIST_TOKEN && $('#gistToken')) {
+  try { $('#gistToken').value = GIST_TOKEN } catch (e) { }
 }
